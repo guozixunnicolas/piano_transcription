@@ -14,7 +14,7 @@ import torch
  
 from utilities import (create_folder, get_filename, RegressionPostProcessor, 
     OnsetsFramesPostProcessor, write_events_to_midi, load_audio)
-from models import Note_pedal
+from models import Note_pedal, Regress_onset_offset_frame_velocity_CRNN, Regress_pedal_CRNN
 from pytorch_utils import move_data_to_device, forward
 import config
 
