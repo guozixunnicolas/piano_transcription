@@ -11,7 +11,8 @@ import datetime
 import collections
 import pickle
 from mido import MidiFile
-
+import pretty_midi
+import jams
 from piano_vad import (note_detection_with_onset_offset_regress, 
     pedal_detection_with_onset_offset_regress, onsets_frames_note_detection, onsets_frames_pedal_detection)
 import config
@@ -165,8 +166,7 @@ def read_midi(midi_path):
 
     midi_dict = {
         'midi_event': np.array(message_list), 
-        'midi_event_time': np.array(time_in_second)}
-
+        'midi_event_time': np.array(time_in_second)} #Controller number 64 is commonly used for sustain (pedal).
     return midi_dict
 
 
@@ -211,6 +211,76 @@ def read_maps_midi(midi_path):
 
     return midi_dict
 
+def read_guitarset_midi(midi_path):
+    """Parse MIDI file.
+
+    Args:
+      midi_path: str
+
+    Returns:
+      midi_dict: dict, e.g. {
+        'midi_event': [
+            'program_change channel=0 program=0 time=0', 
+            'control_change channel=0 control=64 value=127 time=0', 
+            'control_change channel=0 control=64 value=63 time=236', 
+            ...],
+        'midi_event_time': [0., 0, 0.98307292, ...]}
+    """
+
+    midi_file = MidiFile(midi_path)
+    ticks_per_beat = midi_file.ticks_per_beat
+
+    assert len(midi_file.tracks) == 2
+    """The first track contains tempo, time signature. The second track 
+    contains piano events."""
+
+    microseconds_per_beat = midi_file.tracks[0][0].tempo
+    beats_per_second = 1e6 / microseconds_per_beat
+    ticks_per_second = ticks_per_beat * beats_per_second
+
+    message_list = []
+
+    ticks = 0
+    time_in_second = []
+
+    for message in midi_file.tracks[1]:
+        message_list.append(str(message))
+        ticks += message.time
+        time_in_second.append(ticks / ticks_per_second)
+    midi_dict = {
+        'midi_event': np.array(message_list), 
+        'midi_event_time': np.array(time_in_second)} #Controller number 64 is commonly used for sustain (pedal).
+    return midi_dict
+
+def jams_to_midi(path, q=0, save_path = "tmp.mid"):
+    # q = 1: with pitch bend. q = 0: without pitch bend.
+    jam = jams.load(path)
+    midi = pretty_midi.PrettyMIDI()
+    annos = jam.search(namespace='note_midi')
+    if len(annos) == 0:
+        annos = jam.search(namespace='pitch_midi')
+    
+    midi_ch = pretty_midi.Instrument(program=25)
+    for anno in annos:
+        for note in anno:
+            pitch = int(round(note.value))
+            bend_amount = int(round((note.value - pitch) * 4096))
+            st = note.time
+            dur = note.duration
+            n = pretty_midi.Note(
+                velocity=100 + np.random.choice(range(-5, 5)),
+                pitch=pitch, start=st,
+                end=st + dur
+            )
+            # pb = pretty_midi.PitchBend(pitch=bend_amount * q, time=st)
+            midi_ch.notes.append(n)
+            # midi_ch.pitch_bends.append(pb)
+    if len(midi_ch.notes) != 0:
+        midi.instruments.append(midi_ch)
+    
+    if save_path:
+        midi.write(save_path)
+    return midi
 
 class TargetProcessor(object):
     def __init__(self, segment_seconds, frames_per_second, begin_note, 
@@ -341,7 +411,7 @@ class TargetProcessor(object):
                 attribute_list: ['control_change', 'channel=0', 'control=64', 'value=45', 'time=43']"""
 
                 ped_value = int(attribute_list[3].split('=')[1])
-                if ped_value >= 64:
+                if ped_value >= 64: #if value greater than 64 then onset, otherwise offset
                     if 'onset_time' not in pedal_dict:
                         pedal_dict['onset_time'] = midi_events_time[i]
                 else:
@@ -351,7 +421,7 @@ class TargetProcessor(object):
                             'offset_time': midi_events_time[i]})
                         pedal_dict = {}
 
-        # Add unpaired onsets to events
+        # Add unpaired onsets to events #now buffer_dict contains unmatched midi_notes
         for midi_note in buffer_dict.keys():
             note_events.append({
                 'midi_note': midi_note, 
@@ -394,12 +464,12 @@ class TargetProcessor(object):
             piano_note = np.clip(note_event['midi_note'] - self.begin_note + note_shift, 0, self.max_piano_note) 
             """There are 88 keys on a piano"""
 
-            if 0 <= piano_note <= self.max_piano_note:
+            if 0 <= piano_note <= self.max_piano_note: #every t will become t-start_time 
                 bgn_frame = int(round((note_event['onset_time'] - start_time) * self.frames_per_second))
                 fin_frame = int(round((note_event['offset_time'] - start_time) * self.frames_per_second))
 
                 if fin_frame >= 0:
-                    frame_roll[max(bgn_frame, 0) : fin_frame + 1, piano_note] = 1
+                    frame_roll[max(bgn_frame, 0) : fin_frame + 1, piano_note] = 1 #why fin_frame + 1 instead of fin_frame
 
                     offset_roll[fin_frame, piano_note] = 1
                     velocity_roll[max(bgn_frame, 0) : fin_frame + 1, piano_note] = note_event['velocity']
@@ -538,19 +608,19 @@ class TargetProcessor(object):
         output = np.ones_like(input)
         
         locts = np.where(input < 0.5)[0] 
-        if len(locts) > 0:
-            for t in range(0, locts[0]):
+        if len(locts) > 0: #frames where there's an onset/offset
+            for t in range(0, locts[0]): #from the very beginning to the frame there's an onset/offset --> count distance between center of each frame to the center of the first onset
                 output[t] = step * (t - locts[0]) - input[locts[0]]
 
-            for i in range(0, len(locts) - 1):
-                for t in range(locts[i], (locts[i] + locts[i + 1]) // 2):
-                    output[t] = step * (t - locts[i]) - input[locts[i]]
+            for i in range(0, len(locts) - 1): #for each frame where there's an onset
+                for t in range(locts[i], (locts[i] + locts[i + 1]) // 2): #from frame[loc[i]] where there is an onset to the mid way until the next onset 
+                    output[t] = step * (t - locts[i]) - input[locts[i]]  #
 
-                for t in range((locts[i] + locts[i + 1]) // 2, locts[i + 1]):
+                for t in range((locts[i] + locts[i + 1]) // 2, locts[i + 1]):  #from mid way to the next onset 
                     output[t] = step * (t - locts[i + 1]) - input[locts[i]]
 
-            for t in range(locts[-1], len(input)):
-                output[t] = step * (t - locts[-1]) - input[locts[-1]]
+            for t in range(locts[-1], len(input)): #from the very last onset/offset to the last frame--> count distance between center of each frame to the center of the last onset
+                output[t] = step * (t - locts[-1]) - input[locts[-1]] 
 
         output = np.clip(np.abs(output), 0., 0.05) * 20
         output = (1. - output)

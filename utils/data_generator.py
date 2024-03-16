@@ -17,7 +17,7 @@ import config
 
 class MaestroDataset(object):
     def __init__(self, hdf5s_dir, segment_seconds, frames_per_second, 
-        max_note_shift=0, augmentor=None):
+        max_note_shift=0, augmentor=None, dataset_choice = 'maestro'):
         """This class takes the meta of an audio segment as input, and return 
         the waveform and targets of the audio segment. This class is used by 
         DataLoader. 
@@ -38,7 +38,7 @@ class MaestroDataset(object):
         self.classes_num = config.classes_num
         self.segment_samples = int(self.sample_rate * self.segment_seconds)
         self.augmentor = augmentor
-
+        self.dataset_choice = dataset_choice
         self.random_state = np.random.RandomState(1234)
 
         self.target_processor = TargetProcessor(self.segment_seconds, 
@@ -70,9 +70,12 @@ class MaestroDataset(object):
             'reg_pedal_offset_roll': (frames_num,), 
             'pedal_frame_roll': (frames_num,)}
         """
-        [year, hdf5_name, start_time] = meta
-        hdf5_path = os.path.join(self.hdf5s_dir, year, hdf5_name)
-         
+        if self.dataset_choice == "maestro":
+            [year, hdf5_name, start_time] = meta
+            hdf5_path = os.path.join(self.hdf5s_dir, year, hdf5_name)
+        elif self.dataset_choice == "GuitarSet":
+            [hdf5_name, start_time] = meta
+            hdf5_path = os.path.join(self.hdf5s_dir, hdf5_name)
         data_dict = {}
 
         note_shift = self.random_state.randint(low=-self.max_note_shift, 
@@ -159,7 +162,7 @@ class Augmentor(object):
 
 class Sampler(object):
     def __init__(self, hdf5s_dir, split, segment_seconds, hop_seconds, 
-            batch_size, mini_data, random_seed=1234):
+            batch_size, mini_data, random_seed=1234, dataset_choice = 'maestro'):
         """Sampler is used to sample segments for training or evaluation.
 
         Args:
@@ -177,6 +180,7 @@ class Sampler(object):
         self.sample_rate = config.sample_rate
         self.batch_size = batch_size
         self.random_state = np.random.RandomState(random_seed)
+        self.dataset_choice = dataset_choice
 
         (hdf5_names, hdf5_paths) = traverse_folder(hdf5s_dir)
         self.segment_list = []
@@ -186,10 +190,14 @@ class Sampler(object):
             with h5py.File(hdf5_path, 'r') as hf:
                 if hf.attrs['split'].decode() == split:
                     audio_name = hdf5_path.split('/')[-1]
-                    year = hf.attrs['year'].decode()
+                    if self.dataset_choice == "maestro":
+                        year = hf.attrs['year'].decode()
                     start_time = 0
                     while (start_time + self.segment_seconds < hf.attrs['duration']):
-                        self.segment_list.append([year, audio_name, start_time])
+                        if self.dataset_choice == "maestro":
+                            self.segment_list.append([year, audio_name, start_time])
+                        elif self.dataset_choice == "GuitarSet":
+                            self.segment_list.append([audio_name, start_time])
                         start_time += self.hop_seconds
                     
                     n += 1
@@ -240,7 +248,7 @@ class Sampler(object):
 
 class TestSampler(object):
     def __init__(self, hdf5s_dir, split, segment_seconds, hop_seconds, 
-            batch_size, mini_data, random_seed=1234):
+            batch_size, mini_data, random_seed=1234, dataset_choice = 'maestro'):
         """Sampler for testing.
 
         Args:
@@ -259,6 +267,7 @@ class TestSampler(object):
         self.batch_size = batch_size
         self.random_state = np.random.RandomState(random_seed)
         self.max_evaluate_iteration = 20    # Number of mini-batches to validate
+        self.dataset_choice = dataset_choice
 
         (hdf5_names, hdf5_paths) = traverse_folder(hdf5s_dir)
         self.segment_list = []
@@ -268,10 +277,14 @@ class TestSampler(object):
             with h5py.File(hdf5_path, 'r') as hf:
                 if hf.attrs['split'].decode() == split:
                     audio_name = hdf5_path.split('/')[-1]
-                    year = hf.attrs['year'].decode()
+                    if self.dataset_choice == "maestro":
+                        year = hf.attrs['year'].decode()
                     start_time = 0
                     while (start_time + self.segment_seconds < hf.attrs['duration']):
-                        self.segment_list.append([year, audio_name, start_time])
+                        if self.dataset_choice == "maestro":
+                            self.segment_list.append([year, audio_name, start_time])
+                        elif self.dataset_choice == "GuitarSet":
+                            self.segment_list.append([audio_name, start_time])
                         start_time += self.hop_seconds
                     
                     n += 1

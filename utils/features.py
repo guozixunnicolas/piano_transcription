@@ -7,9 +7,9 @@ import logging
 import h5py
 import librosa
 import logging
-
+import json
 from utilities import (create_folder, float32_to_int16, create_logging, 
-    get_filename, read_metadata, read_midi, read_maps_midi)
+    get_filename, read_metadata, read_midi, read_maps_midi,read_guitarset_midi, jams_to_midi)
 import config
 
 
@@ -28,7 +28,7 @@ def pack_maestro_dataset_to_hdf5(args):
     sample_rate = config.sample_rate
 
     # Paths
-    csv_path = os.path.join(dataset_dir, 'maestro-v2.0.0.csv')
+    csv_path = os.path.join(dataset_dir, 'maestro-v3.0.0.csv')
     waveform_hdf5s_dir = os.path.join(workspace, 'hdf5s', 'maestro')
 
     logs_dir = os.path.join(workspace, 'logs', get_filename(__file__))
@@ -139,7 +139,73 @@ def pack_maps_dataset_to_hdf5(args):
     logging.info('Write hdf5 to {}'.format(packed_hdf5_path))
     logging.info('Time: {:.3f} s'.format(time.time() - feature_time))
 
+def pack_GuitarSet_dataset_to_hdf5(args):
+    """GuitarSet  Ref:
 
+    [1] Emiya, Valentin. "MAPS Database A piano database for multipitch 
+    estimation and automatic transcription of music. 2016
+
+    Load & resample MAPS audio files, then write to hdf5 files.
+
+    Args:
+      dataset_dir: str, directory of dataset
+      workspace: str, directory of your workspace
+    """
+
+    # Arguments & parameters
+    dataset_dir = args.dataset_dir
+    workspace = args.workspace
+
+    sample_rate = config.sample_rate
+    json_path = os.path.join(dataset_dir, "GuitarSet_seed:42_ratio_0.9.json")
+
+    # Paths
+    waveform_hdf5s_dir = os.path.join(workspace, 'hdf5s', 'GuitarSet')
+
+    logs_dir = os.path.join(workspace, 'logs', get_filename(__file__))
+    create_logging(logs_dir, filemode='w')
+    logging.info(args)
+
+    feature_time = time.time()
+    count = 0
+
+    # Read meta dict
+
+    metadata = json.load(open(json_path)) 
+    train_files = [(wav_path, jams_path, "train") for wav_path, jams_path in zip(metadata["train_data"], metadata["train_annotation"])]
+    test_files = [(wav_path, jams_path, "test") for wav_path, jams_path in zip(metadata["test_data"], metadata["test_annotation"])]
+
+    feature_time = time.time()
+
+    # Load & resample each audio file to a hdf5 file
+    for wav_path, jams_path, split in train_files + test_files:
+        wav_name, jams_name = wav_path.split("/")[-1], jams_path.split("/")[-1]
+        
+        # Convert jams to midi temporarily 
+        tmp_mid_path = jams_path.split("/")[-1][:-4]+"mid"
+        _ = jams_to_midi(jams_path, save_path = tmp_mid_path)
+        midi_dict = read_guitarset_midi(tmp_mid_path)
+        os.system(f"rm {tmp_mid_path}")
+
+        # Load audio
+        (audio, _) = librosa.core.load(wav_path, sr=sample_rate, mono=True)
+        audio = np.clip(audio, -1, 1)
+        packed_hdf5_path = os.path.join(waveform_hdf5s_dir, f'{wav_path.split("/")[-1].split(".")[0]}.h5')
+
+        create_folder(os.path.dirname(packed_hdf5_path))
+
+        with h5py.File(packed_hdf5_path, 'w') as hf:
+            hf.attrs.create('split', data=split.encode(), dtype='S20')
+            hf.attrs.create('jams_filename', data=jams_name.encode(), dtype='S100')
+            hf.attrs.create('audio_filename', data=wav_name.encode(), dtype='S100')
+            hf.attrs.create('duration', data=len(audio)/sample_rate, dtype=np.float32)
+
+            hf.create_dataset(name='midi_event', data=[e.encode() for e in midi_dict['midi_event']], dtype='S100') #TODO
+            hf.create_dataset(name='midi_event_time', data=midi_dict['midi_event_time'], dtype=np.float32) #TODO
+            hf.create_dataset(name='waveform', data=float32_to_int16(audio), dtype=np.int16)
+        
+    logging.info('Write hdf5 to {}'.format(packed_hdf5_path))
+    logging.info('Time: {:.3f} s'.format(time.time() - feature_time))
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='')
@@ -153,6 +219,10 @@ if __name__ == '__main__':
     parser_pack_maps.add_argument('--dataset_dir', type=str, required=True, help='Directory of dataset.')
     parser_pack_maps.add_argument('--workspace', type=str, required=True, help='Directory of your workspace.')
 
+    parser_pack_guitarset = subparsers.add_parser('pack_GuitarSet_dataset_to_hdf5')
+    parser_pack_guitarset.add_argument('--dataset_dir', type=str, required=True, help='Directory of dataset.')
+    parser_pack_guitarset.add_argument('--workspace', type=str, required=True, help='Directory of your workspace.')
+
     # Parse arguments
     args = parser.parse_args()
     
@@ -161,6 +231,7 @@ if __name__ == '__main__':
         
     elif args.mode == 'pack_maps_dataset_to_hdf5':
         pack_maps_dataset_to_hdf5(args)
-
+    elif args.mode == 'pack_GuitarSet_dataset_to_hdf5':
+        pack_GuitarSet_dataset_to_hdf5(args)
     else:
         raise Exception('Incorrect arguments!')
