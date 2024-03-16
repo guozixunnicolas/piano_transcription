@@ -58,7 +58,8 @@ def train(args):
     device = torch.device('cuda') if args.cuda and torch.cuda.is_available() else torch.device('cpu')
     mini_data = args.mini_data
     filename = args.filename
-
+    dataset_choice = args.dataset
+    if_contains_val_set = args.if_contains_val_set
     sample_rate = config.sample_rate
     segment_seconds = config.segment_seconds
     hop_seconds = config.hop_seconds
@@ -71,24 +72,23 @@ def train(args):
     loss_func = get_loss_func(loss_type)
 
     # Paths
-    hdf5s_dir = os.path.join(workspace, 'hdf5s', 'maestro')
-
+    hdf5s_dir = os.path.join(workspace, 'hdf5s', dataset_choice)
     checkpoints_dir = os.path.join(workspace, 'checkpoints', filename, 
-        model_type, 'loss_type={}'.format(loss_type), 
+        model_type, dataset_choice, 'loss_type={}'.format(loss_type), 
         'augmentation={}'.format(augmentation), 
         'max_note_shift={}'.format(max_note_shift),
         'batch_size={}'.format(batch_size))
     create_folder(checkpoints_dir)
 
     statistics_path = os.path.join(workspace, 'statistics', filename, 
-        model_type, 'loss_type={}'.format(loss_type), 
+        model_type, dataset_choice, 'loss_type={}'.format(loss_type), 
         'augmentation={}'.format(augmentation), 
         'max_note_shift={}'.format(max_note_shift), 
         'batch_size={}'.format(batch_size), 'statistics.pkl')
     create_folder(os.path.dirname(statistics_path))
 
     logs_dir = os.path.join(workspace, 'logs', filename, 
-        model_type, 'loss_type={}'.format(loss_type), 
+        model_type, dataset_choice, 'loss_type={}'.format(loss_type), 
         'augmentation={}'.format(augmentation), 
         'max_note_shift={}'.format(max_note_shift), 
         'batch_size={}'.format(batch_size))
@@ -106,7 +106,7 @@ def train(args):
     
     # Model
     Model = eval(model_type)
-    model = Model(frames_per_second=frames_per_second, classes_num=classes_num)
+    model = Model(frames_per_second=frames_per_second, classes_num=classes_num) #TODO add more configs, e.g, extend pedal
 
     if augmentation == 'none':
         augmentor = None
@@ -116,33 +116,35 @@ def train(args):
         raise Exception('Incorrect argumentation!')
     
     # Dataset
+
     train_dataset = MaestroDataset(hdf5s_dir=hdf5s_dir, 
         segment_seconds=segment_seconds, frames_per_second=frames_per_second, 
-        max_note_shift=max_note_shift, augmentor=augmentor)
+        max_note_shift=max_note_shift, augmentor=augmentor, dataset_choice = dataset_choice)
 
     evaluate_dataset = MaestroDataset(hdf5s_dir=hdf5s_dir, 
         segment_seconds=segment_seconds, frames_per_second=frames_per_second, 
-        max_note_shift=0)
+        max_note_shift=0, dataset_choice = dataset_choice)
 
     # Sampler for training
     train_sampler = Sampler(hdf5s_dir=hdf5s_dir, split='train', 
         segment_seconds=segment_seconds, hop_seconds=hop_seconds, 
-        batch_size=batch_size, mini_data=mini_data)
+        batch_size=batch_size, mini_data=mini_data, dataset_choice = dataset_choice)
 
-    # Sampler for evaluation
+    # Sampler for evaluation 
     evaluate_train_sampler = TestSampler(hdf5s_dir=hdf5s_dir, 
         split='train', segment_seconds=segment_seconds, hop_seconds=hop_seconds, 
-        batch_size=batch_size, mini_data=mini_data)
-
-    evaluate_validate_sampler = TestSampler(hdf5s_dir=hdf5s_dir, 
-        split='validation', segment_seconds=segment_seconds, hop_seconds=hop_seconds, 
-        batch_size=batch_size, mini_data=mini_data)
+        batch_size=batch_size, mini_data=mini_data, dataset_choice = dataset_choice)
+    
+    if if_contains_val_set: #Maestro has a val set whereas GuitarSet does not have a val set
+        evaluate_validate_sampler = TestSampler(hdf5s_dir=hdf5s_dir, 
+            split='validation', segment_seconds=segment_seconds, hop_seconds=hop_seconds, 
+            batch_size=batch_size, mini_data=mini_data, dataset_choice = dataset_choice)
 
     evaluate_test_sampler = TestSampler(hdf5s_dir=hdf5s_dir, 
         split='test', segment_seconds=segment_seconds, hop_seconds=hop_seconds, 
-        batch_size=batch_size, mini_data=mini_data)
+        batch_size=batch_size, mini_data=mini_data, dataset_choice = dataset_choice)
 
-    # Dataloader
+    # Dataloader 
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset, 
         batch_sampler=train_sampler, collate_fn=collate_fn, 
         num_workers=num_workers, pin_memory=True)
@@ -150,10 +152,10 @@ def train(args):
     evaluate_train_loader = torch.utils.data.DataLoader(dataset=evaluate_dataset, 
         batch_sampler=evaluate_train_sampler, collate_fn=collate_fn, 
         num_workers=num_workers, pin_memory=True)
-
-    validate_loader = torch.utils.data.DataLoader(dataset=evaluate_dataset, 
-        batch_sampler=evaluate_validate_sampler, collate_fn=collate_fn, 
-        num_workers=num_workers, pin_memory=True)
+    if if_contains_val_set:
+        validate_loader = torch.utils.data.DataLoader(dataset=evaluate_dataset, 
+            batch_sampler=evaluate_validate_sampler, collate_fn=collate_fn, 
+            num_workers=num_workers, pin_memory=True)
 
     test_loader = torch.utils.data.DataLoader(dataset=evaluate_dataset, 
         batch_sampler=evaluate_test_sampler, collate_fn=collate_fn, 
@@ -172,8 +174,8 @@ def train(args):
     # Resume training
     if resume_iteration > 0:
         resume_checkpoint_path = os.path.join(workspace, 'checkpoints', filename, 
-            model_type, 'loss_type={}'.format(loss_type), 
-            'augmentation={}'.format(augmentation), 'batch_size={}'.format(batch_size), 
+            model_type, dataset_choice, 'loss_type={}'.format(loss_type), 
+            'augmentation={}'.format(augmentation), 'max_note_shift={}'.format(max_note_shift), 'batch_size={}'.format(batch_size), 
                 '{}_iterations.pth'.format(resume_iteration))
 
         logging.info('Loading checkpoint {}'.format(resume_checkpoint_path))
@@ -205,15 +207,18 @@ def train(args):
             train_fin_time = time.time()
 
             evaluate_train_statistics = evaluator.evaluate(evaluate_train_loader)
-            validate_statistics = evaluator.evaluate(validate_loader)
+            if if_contains_val_set:
+                validate_statistics = evaluator.evaluate(validate_loader)
             test_statistics = evaluator.evaluate(test_loader)
 
             logging.info('    Train statistics: {}'.format(evaluate_train_statistics))
-            logging.info('    Validation statistics: {}'.format(validate_statistics))
+            if if_contains_val_set:
+                logging.info('    Validation statistics: {}'.format(validate_statistics))
             logging.info('    Test statistics: {}'.format(test_statistics))
 
             statistics_container.append(iteration, evaluate_train_statistics, data_type='train')
-            statistics_container.append(iteration, validate_statistics, data_type='validation')
+            if if_contains_val_set:
+                statistics_container.append(iteration, validate_statistics, data_type='validation')
             statistics_container.append(iteration, test_statistics, data_type='test')
             statistics_container.dump()
 
@@ -286,7 +291,8 @@ if __name__ == '__main__':
     parser_train.add_argument('--early_stop', type=int, required=True)
     parser_train.add_argument('--mini_data', action='store_true', default=False)
     parser_train.add_argument('--cuda', action='store_true', default=False)
-    
+    parser_train.add_argument('--dataset', type=str, default='GuitarSet', required=True)
+    parser_train.add_argument('--if_contains_val_set', action='store_true', default=False)
     args = parser.parse_args()
     args.filename = get_filename(__file__)
 
