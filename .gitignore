@@ -4,4 +4,6 @@
 *.hdf5
 *.pyc
 __pycache__
+utils/inspect_data.py
+pytorch/main_maestro.py
 
