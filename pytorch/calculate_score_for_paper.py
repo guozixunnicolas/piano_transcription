@@ -58,7 +58,7 @@ def infer_prob(args):
     hdf5s_dir = os.path.join(workspace, 'hdf5s', dataset)
     probs_dir = os.path.join(workspace, 'probs', 
         'model_type={}'.format(model_type), 
-        'augmentation={}'.format(augmentation), 'dataset={}'.format(dataset), 
+        'augmentation={}'.format(augmentation), 'dataset={}'.format(dataset), "checkpoint={}".format(checkpoint_path.split("/")[-1]),
         'split={}'.format(split))
     create_folder(probs_dir)
 
@@ -128,8 +128,8 @@ class ScoreCalculator(object):
         self.frames_per_second = config.frames_per_second
         self.classes_num = config.classes_num
         self.velocity_scale = config.velocity_scale
-        self.velocity = True  # True | False
-        self.pedal = True
+        self.velocity = False  # True | False #if using GuitarSet change to False
+        self.pedal = False #if using GuitarSet change to False
 
         self.evaluate_frame = True
         self.onset_tolerance = 0.05
@@ -332,12 +332,12 @@ def calculate_metrics(args, thresholds=None):
     dataset = args.dataset
     split = args.split
     post_processor_type = args.post_processor_type
+    checkpoint_path = args.checkpoint_path
 
     # Paths
     hdf5s_dir = os.path.join(workspace, 'hdf5s', dataset)
     probs_dir = os.path.join(workspace, 'probs', 'model_type={}'.format(model_type), 
-        'augmentation={}'.format(augmentation), 'dataset={}'.format(dataset), 'split={}'.format(split))
-
+        'augmentation={}'.format(augmentation), 'dataset={}'.format(dataset), "checkpoint={}".format(checkpoint_path.split("/")[-1]), 'split={}'.format(split))
     # Score calculator
     score_calculator = ScoreCalculator(hdf5s_dir, probs_dir, split=split, post_processor_type=post_processor_type)
 
@@ -363,7 +363,7 @@ if __name__ == '__main__':
     parser_infer_prob.add_argument('--model_type', type=str, required=True)
     parser_infer_prob.add_argument('--augmentation', type=str, required=True)
     parser_infer_prob.add_argument('--checkpoint_path', type=str, required=True)
-    parser_infer_prob.add_argument('--dataset', type=str, required=True, choices=['maestro', 'maps'])
+    parser_infer_prob.add_argument('--dataset', type=str, required=True, choices=['maestro', 'maps', 'GuitarSet'])
     parser_infer_prob.add_argument('--split', type=str, required=True)
     parser_infer_prob.add_argument('--post_processor_type', type=str, default='regression')
     parser_infer_prob.add_argument('--cuda', action='store_true', default=False)
@@ -372,7 +372,8 @@ if __name__ == '__main__':
     parser_metrics.add_argument('--workspace', type=str, required=True)
     parser_metrics.add_argument('--model_type', type=str, required=True)
     parser_metrics.add_argument('--augmentation', type=str, required=True)
-    parser_metrics.add_argument('--dataset', type=str, required=True, choices=['maestro', 'maps'])
+    parser_metrics.add_argument('--checkpoint_path', type=str, required=True)
+    parser_metrics.add_argument('--dataset', type=str, required=True, choices=['maestro', 'maps', 'GuitarSet'])
     parser_metrics.add_argument('--split', type=str, required=True)
     parser_metrics.add_argument('--post_processor_type', type=str, default='regression')
 
