@@ -232,7 +232,7 @@ def train(args):
             train_bgn_time = time.time()
         
         # Save model
-        if iteration % 20000 == 0:
+        if iteration % 5000 == 0:
             checkpoint = {
                 'iteration': iteration, 
                 'model': model.module.state_dict(), 
