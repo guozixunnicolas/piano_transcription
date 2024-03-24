@@ -73,7 +73,7 @@ class MaestroDataset(object):
         if self.dataset_choice == "maestro":
             [year, hdf5_name, start_time] = meta
             hdf5_path = os.path.join(self.hdf5s_dir, year, hdf5_name)
-        elif self.dataset_choice == "GuitarSet":
+        elif self.dataset_choice == "GuitarSet" or self.dataset_choice == "Gaestro":
             [hdf5_name, start_time] = meta
             hdf5_path = os.path.join(self.hdf5s_dir, hdf5_name)
         data_dict = {}
@@ -192,12 +192,21 @@ class Sampler(object):
                     audio_name = hdf5_path.split('/')[-1]
                     if self.dataset_choice == "maestro":
                         year = hf.attrs['year'].decode()
-                    start_time = 0
+
+                    if dataset_choice!="Gaestro":
+                        start_time = 0
+                    else: 
+                        start_time = hf.attrs['start_time'] 
                     while (start_time + self.segment_seconds < hf.attrs['duration']):
                         if self.dataset_choice == "maestro":
                             self.segment_list.append([year, audio_name, start_time])
                         elif self.dataset_choice == "GuitarSet":
                             self.segment_list.append([audio_name, start_time])
+                        elif self.dataset_choice == "Gaestro": 
+                            if start_time>=hf.attrs['end_time']:
+                                break
+                            self.segment_list.append([audio_name, start_time])
+                            
                         start_time += self.hop_seconds
                     
                     n += 1
@@ -279,11 +288,19 @@ class TestSampler(object):
                     audio_name = hdf5_path.split('/')[-1]
                     if self.dataset_choice == "maestro":
                         year = hf.attrs['year'].decode()
-                    start_time = 0
+                    # start_time = 0
+                    if dataset_choice!="Gaestro":
+                        start_time = 0
+                    else: 
+                        start_time = hf.attrs['start_time'] 
                     while (start_time + self.segment_seconds < hf.attrs['duration']):
                         if self.dataset_choice == "maestro":
                             self.segment_list.append([year, audio_name, start_time])
                         elif self.dataset_choice == "GuitarSet":
+                            self.segment_list.append([audio_name, start_time])
+                        elif self.dataset_choice == "Gaestro": 
+                            if start_time>=hf.attrs['end_time']:
+                                break
                             self.segment_list.append([audio_name, start_time])
                         start_time += self.hop_seconds
                     
