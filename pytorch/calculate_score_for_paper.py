@@ -133,7 +133,7 @@ class ScoreCalculator(object):
 
         self.evaluate_frame = True
         self.onset_tolerance = 0.05
-        self.offset_ratio = 0.2  # None | 0.2
+        self.offset_ratio = None  # None | 0.2 Switch to None --> note without offset
         self.offset_min_tolerance = 0.05
 
         self.pedal_offset_threshold = 0.2
@@ -363,7 +363,7 @@ if __name__ == '__main__':
     parser_infer_prob.add_argument('--model_type', type=str, required=True)
     parser_infer_prob.add_argument('--augmentation', type=str, required=True)
     parser_infer_prob.add_argument('--checkpoint_path', type=str, required=True)
-    parser_infer_prob.add_argument('--dataset', type=str, required=True, choices=['maestro', 'maps', 'GuitarSet'])
+    parser_infer_prob.add_argument('--dataset', type=str, required=True, choices=['maestro', 'maps', 'GuitarSet', 'Gaestro'])
     parser_infer_prob.add_argument('--split', type=str, required=True)
     parser_infer_prob.add_argument('--post_processor_type', type=str, default='regression')
     parser_infer_prob.add_argument('--cuda', action='store_true', default=False)
@@ -373,7 +373,7 @@ if __name__ == '__main__':
     parser_metrics.add_argument('--model_type', type=str, required=True)
     parser_metrics.add_argument('--augmentation', type=str, required=True)
     parser_metrics.add_argument('--checkpoint_path', type=str, required=True)
-    parser_metrics.add_argument('--dataset', type=str, required=True, choices=['maestro', 'maps', 'GuitarSet'])
+    parser_metrics.add_argument('--dataset', type=str, required=True, choices=['maestro', 'maps', 'GuitarSet', 'Gaestro'])
     parser_metrics.add_argument('--split', type=str, required=True)
     parser_metrics.add_argument('--post_processor_type', type=str, default='regression')
 
