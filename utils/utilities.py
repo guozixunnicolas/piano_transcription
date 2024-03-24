@@ -16,7 +16,14 @@ import jams
 from piano_vad import (note_detection_with_onset_offset_regress, 
     pedal_detection_with_onset_offset_regress, onsets_frames_note_detection, onsets_frames_pedal_detection)
 import config
+import json
 
+def get_first_and_last_element(json_file):
+    with open(json_file, 'r') as f:
+        data = json.load(f)
+        first_element = data[0][1]
+        last_element = data[-1][1]
+    return first_element, last_element
 
 def create_folder(fd):
     if not os.path.exists(fd):
