@@ -30,7 +30,7 @@ def infer_prob(args):
       augmentation: str, e.g. 'none'
       checkpoint_path: str
       dataset: 'maestro'
-      split: 'test'
+      split: ['test'] or ['train', 'test'] (cross validation)
       post_processor_type: 'regression' | 'onsets_frames'. High-resolution 
         system should use 'regression'. 'onsets_frames' is only used to compare
         with Googl's onsets and frames system.
@@ -44,6 +44,7 @@ def infer_prob(args):
     augmentation = args.augmentation
     dataset = args.dataset
     split = args.split
+    split = split.split(",")
     post_processor_type = args.post_processor_type
     device = torch.device('cuda') if args.cuda and torch.cuda.is_available() else torch.device('cpu')
     
@@ -59,7 +60,7 @@ def infer_prob(args):
     probs_dir = os.path.join(workspace, 'probs', 
         'model_type={}'.format(model_type), 
         'augmentation={}'.format(augmentation), 'dataset={}'.format(dataset), "checkpoint={}".format(checkpoint_path.split("/")[-1]),
-        'split={}'.format(split))
+        'split={}'.format("_".join(split)))
     create_folder(probs_dir)
 
     # Transcriptor
@@ -72,7 +73,7 @@ def infer_prob(args):
     n = 0
     for n, hdf5_path in enumerate(hdf5_paths):
         with h5py.File(hdf5_path, 'r') as hf:
-            if hf.attrs['split'].decode() == split:
+            if hf.attrs['split'].decode() in split:
                 print(n, hdf5_path)
                 n += 1
 
@@ -164,7 +165,7 @@ class ScoreCalculator(object):
 
         for n, hdf5_path in enumerate(self.hdf5_paths):
             with h5py.File(hdf5_path, 'r') as hf:
-                if hf.attrs['split'].decode() == self.split:
+                if hf.attrs['split'].decode() in self.split:
                     list_args.append([n, hdf5_path, params])
                     """e.g., [0, 'xx.h5', [0.3, 0.3, 0.3]]"""
            
@@ -331,13 +332,14 @@ def calculate_metrics(args, thresholds=None):
     augmentation = args.augmentation
     dataset = args.dataset
     split = args.split
+    split = split.split(",")
     post_processor_type = args.post_processor_type
     checkpoint_path = args.checkpoint_path
 
     # Paths
     hdf5s_dir = os.path.join(workspace, 'hdf5s', dataset)
     probs_dir = os.path.join(workspace, 'probs', 'model_type={}'.format(model_type), 
-        'augmentation={}'.format(augmentation), 'dataset={}'.format(dataset), "checkpoint={}".format(checkpoint_path.split("/")[-1]), 'split={}'.format(split))
+        'augmentation={}'.format(augmentation), 'dataset={}'.format(dataset), "checkpoint={}".format(checkpoint_path.split("/")[-1]), 'split={}'.format("_".join(split)))
     # Score calculator
     score_calculator = ScoreCalculator(hdf5s_dir, probs_dir, split=split, post_processor_type=post_processor_type)
 
@@ -357,7 +359,6 @@ def calculate_metrics(args, thresholds=None):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='')
     subparsers = parser.add_subparsers(dest='mode')
-    
     parser_infer_prob = subparsers.add_parser('infer_prob')
     parser_infer_prob.add_argument('--workspace', type=str, required=True)
     parser_infer_prob.add_argument('--model_type', type=str, required=True)
@@ -367,15 +368,6 @@ if __name__ == '__main__':
     parser_infer_prob.add_argument('--split', type=str, required=True)
     parser_infer_prob.add_argument('--post_processor_type', type=str, default='regression')
     parser_infer_prob.add_argument('--cuda', action='store_true', default=False)
-
-    parser_metrics = subparsers.add_parser('calculate_metrics')
-    parser_metrics.add_argument('--workspace', type=str, required=True)
-    parser_metrics.add_argument('--model_type', type=str, required=True)
-    parser_metrics.add_argument('--augmentation', type=str, required=True)
-    parser_metrics.add_argument('--checkpoint_path', type=str, required=True)
-    parser_metrics.add_argument('--dataset', type=str, required=True, choices=['maestro', 'maps', 'GuitarSet', 'Gaestro'])
-    parser_metrics.add_argument('--split', type=str, required=True)
-    parser_metrics.add_argument('--post_processor_type', type=str, default='regression')
 
     args = parser.parse_args()
 
