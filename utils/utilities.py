@@ -18,6 +18,28 @@ from piano_vad import (note_detection_with_onset_offset_regress,
 import config
 import json
 
+def frame(signal, frame_length, frame_step, pad_end=True, pad_value=0, axis=-1):
+    """input shape (1, audio_len)"""
+    pad_size = 0
+    signal_length = signal.shape[axis]
+
+    output_frame_num = np.ceil((signal_length - frame_length)/frame_step + 1)
+    pad_size = (output_frame_num-1) * frame_step + frame_length - signal_length
+    pad_size = int(pad_size)
+
+    pad_axis = [(0, 0)] * signal.ndim
+    pad_axis[axis] = (0, pad_size)
+    signal = np.pad(signal, pad_axis, mode='constant', constant_values=pad_value)
+    pointer = 0
+    i = 0
+    frames = []
+    while i<=output_frame_num-1:
+        frames.append(signal[:, pointer : pointer + frame_length])
+        pointer += frame_step
+        i+=1
+    out = np.concatenate(frames, axis=0)
+    return out
+    
 def get_first_and_last_element(json_file):
     with open(json_file, 'r') as f:
         data = json.load(f)
