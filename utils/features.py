@@ -292,7 +292,7 @@ if __name__ == '__main__':
     parser_pack_gaestro = subparsers.add_parser('pack_Gaestro_dataset_to_hdf5')
     parser_pack_gaestro.add_argument('--dataset_dir', type=str, required=True, help='Directory of dataset.')
     parser_pack_gaestro.add_argument('--workspace', type=str, required=True, help='Directory of your workspace.')
-    parser_pack_gaestro.add_argument('--json_file', type=str, required=False, default = '/import/c4dm-datasets-ext/edge_aistpp/Nic_Gaestro/Gaestro_v1_metadata_train_ratio0.9_seed_42.json',help='Directory of the config file.')
+    parser_pack_gaestro.add_argument('--json_file', type=str, required=False, default = '/import/c4dm-datasets-ext/edge_aistpp/Nic_Gastro/Gastro_v1_metadata_train_ratio0.9_seed_42.json',help='Directory of the config file.')
     # Parse arguments
     args = parser.parse_args()
     
