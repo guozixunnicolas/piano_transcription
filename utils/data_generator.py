@@ -98,7 +98,7 @@ class MaestroDataset(object):
             if note_shift != 0:
                 """Augment pitch"""
                 waveform = librosa.effects.pitch_shift(waveform, self.sample_rate, 
-                    note_shift, bins_per_octave=24) #change from 12bins/oct to 24 bints/oct
+                    note_shift, bins_per_octave=12)
 
             data_dict['waveform'] = waveform
 
