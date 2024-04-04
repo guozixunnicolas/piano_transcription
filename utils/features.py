@@ -157,7 +157,7 @@ def pack_GuitarSet_dataset_to_hdf5(args):
     workspace = args.workspace
 
     sample_rate = config.sample_rate
-    json_path = os.path.join(dataset_dir, "GuitarSet_seed:42_ratio_0.9.json")
+    json_path = os.path.join(dataset_dir, "GuitarSet_split.json")
 
     # Paths
     waveform_hdf5s_dir = os.path.join(workspace, 'hdf5s', 'GuitarSet')
@@ -182,11 +182,13 @@ def pack_GuitarSet_dataset_to_hdf5(args):
         wav_name, jams_name = wav_path.split("/")[-1], jams_path.split("/")[-1]
         
         # Convert jams to midi temporarily 
-        tmp_mid_path = jams_path.split("/")[-1][:-4]+"mid"
-        _ = jams_to_midi(jams_path, save_path = tmp_mid_path)
-        midi_dict = read_guitarset_midi(tmp_mid_path)
-        os.system(f"rm {tmp_mid_path}")
-
+        if jams_path.split(".")[-1]=="jams":
+            tmp_mid_path = jams_path.split("/")[-1][:-4]+"mid"
+            _ = jams_to_midi(jams_path, save_path = tmp_mid_path)
+            midi_dict = read_guitarset_midi(tmp_mid_path)
+            os.system(f"rm {tmp_mid_path}")
+        elif jams_path.split(".")[-1]=="mid":
+            midi_dict = read_guitarset_midi(jams_path)
         # Load audio
         (audio, _) = librosa.core.load(wav_path, sr=sample_rate, mono=True)
         audio = np.clip(audio, -1, 1)
