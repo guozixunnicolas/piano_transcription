@@ -14,7 +14,7 @@ import json
 # from sklearn import metrics
 import sklearn
 from concurrent.futures import ProcessPoolExecutor
- 
+from tqdm import tqdm
 from utilities import (create_folder, get_filename, traverse_folder, 
     int16_to_float32, note_to_freq, TargetProcessor, RegressionPostProcessor, 
     OnsetsFramesPostProcessor)
@@ -61,8 +61,12 @@ def infer_prob(args):
     hdf5s_dir = os.path.join(workspace, 'hdf5s', dataset)
     probs_dir = os.path.join(workspace, 'probs', 
         'model_type={}'.format(model_type), 
-        'augmentation={}'.format(augmentation), 'dataset={}'.format(dataset), "checkpoint={}".format(checkpoint_path.split("/")[-1]),
-        'split={}'.format("_".join(split))) #TODO: add ckpt type (e.g., trained from scratch/finetuned)
+        'augmentation={}'.format(augmentation), 
+        'dataset={}'.format(dataset), 
+        "Pretrain={}".format(checkpoint_path.split("/")[-9]),
+        "max_shift={}".format(checkpoint_path.split("/")[-3]),
+        "checkpoint={}".format(checkpoint_path.split("/")[-1]),
+        'split={}'.format("_".join(split))) 
     create_folder(probs_dir)
 
     # Transcriptor
@@ -73,10 +77,10 @@ def infer_prob(args):
     (hdf5_names, hdf5_paths) = traverse_folder(hdf5s_dir)
 
     n = 0
-    for n, hdf5_path in enumerate(hdf5_paths):
+    for n, hdf5_path in tqdm(enumerate(hdf5_paths)):
         with h5py.File(hdf5_path, 'r') as hf:
             if hf.attrs['split'].decode() in split:
-                print(n, hdf5_path)
+                # print(n, hdf5_path)
                 n += 1
 
                 # Load audio                
@@ -339,9 +343,16 @@ def calculate_metrics(args, thresholds=None):
 
     # Paths
     hdf5s_dir = os.path.join(workspace, 'hdf5s', dataset)
-    probs_dir = os.path.join(workspace, 'probs', 'model_type={}'.format(model_type), 
-        'augmentation={}'.format(augmentation), 'dataset={}'.format(dataset), "checkpoint={}".format(checkpoint_path.split("/")[-1]), 'split={}'.format("_".join(split)))
-    # Score calculator
+    probs_dir = os.path.join(workspace, 'probs', 
+        'model_type={}'.format(model_type), 
+        'augmentation={}'.format(augmentation), 
+        'dataset={}'.format(dataset), 
+        "Pretrain={}".format(checkpoint_path.split("/")[-9]),
+        "max_shift={}".format(checkpoint_path.split("/")[-3]),
+        "checkpoint={}".format(checkpoint_path.split("/")[-1]),
+        'split={}'.format("_".join(split))) 
+
+
     score_calculator = ScoreCalculator(hdf5s_dir, probs_dir, split=split, post_processor_type=post_processor_type)
 
     if not thresholds:
@@ -361,6 +372,7 @@ def calculate_metrics(args, thresholds=None):
     out_file_path = os.path.join(args.checkpoint_folder, f'results_{args.checkpoint_path.split("/")[-1][:-4]}_{args.dataset}_{args.split}.json')
     with open(out_file_path, 'w') as f:
         json.dump(out_dict, f)
+    print("file saved at", out_file_path)
 
 
 if __name__ == '__main__':
@@ -381,6 +393,11 @@ if __name__ == '__main__':
 
 
     for checkpoint_name in args.checkpoint_names.split(","):
-        args.checkpoint_path = os.path.join(args.checkpoint_folder, checkpoint_name+"_iterations.pth")
-        infer_prob(args)
-        metrics = calculate_metrics(args)
+        try: 
+            args.checkpoint_path = os.path.join(args.checkpoint_folder, checkpoint_name+"_iterations.pth")
+            print("checkpoint", args.checkpoint_path)
+            infer_prob(args)
+            print("prob finished")
+            metrics = calculate_metrics(args)
+        except Exception as e:
+            print(str(e))
